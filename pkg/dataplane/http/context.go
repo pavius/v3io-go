@@ -113,20 +113,6 @@ func NewContext(parentLogger logger.Logger, newContextInput *v3io.NewContextInpu
 	return newContext, nil
 }
 
-// Code from fasthttp library https://github.com/valyala/fasthttp/blob/ea427d2f448aa8abc0b139f638e80184d4b23d9d/client.go#L1596
-// For some reason, this code is skipped when a custom dial function is provided.
-func addMissingPort(addr string, isTLS bool) string {
-	n := strings.Index(addr, ":")
-	if n >= 0 {
-		return addr
-	}
-	port := 80
-	if isTLS {
-		port = 443
-	}
-	return fmt.Sprintf("%s:%d", addr, port)
-}
-
 // create a new session
 func (c *context) NewSession(newSessionInput *v3io.NewSessionInput) (v3io.Session, error) {
 	return newSession(c.logger,
@@ -138,9 +124,9 @@ func (c *context) NewSession(newSessionInput *v3io.NewSessionInput) (v3io.Sessio
 
 // GetContainers
 func (c *context) GetContainers(getContainersInput *v3io.GetContainersInput,
-	context interface{},
+	cookie interface{},
 	responseChan chan *v3io.Response) (*v3io.Request, error) {
-	return c.sendRequestToWorker(getContainersInput, context, responseChan)
+	return c.sendRequestToWorker(getContainersInput, cookie, responseChan)
 }
 
 // GetContainersSync
@@ -157,9 +143,9 @@ func (c *context) GetContainersSync(getContainersInput *v3io.GetContainersInput)
 
 // GetContainers
 func (c *context) GetContainerContents(getContainerContentsInput *v3io.GetContainerContentsInput,
-	context interface{},
+	cookie interface{},
 	responseChan chan *v3io.Response) (*v3io.Request, error) {
-	return c.sendRequestToWorker(getContainerContentsInput, context, responseChan)
+	return c.sendRequestToWorker(getContainerContentsInput, cookie, responseChan)
 }
 
 // GetContainerContentsSync
@@ -182,9 +168,9 @@ func (c *context) GetContainerContentsSync(getContainerContentsInput *v3io.GetCo
 
 // GetItem
 func (c *context) GetItem(getItemInput *v3io.GetItemInput,
-	context interface{},
+	cookie interface{},
 	responseChan chan *v3io.Response) (*v3io.Request, error) {
-	return c.sendRequestToWorker(getItemInput, context, responseChan)
+	return c.sendRequestToWorker(getItemInput, cookie, responseChan)
 }
 
 // GetItemSync
@@ -232,9 +218,9 @@ func (c *context) GetItemSync(getItemInput *v3io.GetItemInput) (*v3io.Response, 
 
 // GetItems
 func (c *context) GetItems(getItemsInput *v3io.GetItemsInput,
-	context interface{},
+	cookie interface{},
 	responseChan chan *v3io.Response) (*v3io.Request, error) {
-	return c.sendRequestToWorker(getItemsInput, context, responseChan)
+	return c.sendRequestToWorker(getItemsInput, cookie, responseChan)
 }
 
 // GetItemSync
@@ -336,9 +322,9 @@ func (c *context) GetItemsSync(getItemsInput *v3io.GetItemsInput) (*v3io.Respons
 
 // PutItem
 func (c *context) PutItem(putItemInput *v3io.PutItemInput,
-	context interface{},
+	cookie interface{},
 	responseChan chan *v3io.Response) (*v3io.Request, error) {
-	return c.sendRequestToWorker(putItemInput, context, responseChan)
+	return c.sendRequestToWorker(putItemInput, cookie, responseChan)
 }
 
 // PutItemSync
@@ -358,9 +344,9 @@ func (c *context) PutItemSync(putItemInput *v3io.PutItemInput) error {
 
 // PutItems
 func (c *context) PutItems(putItemsInput *v3io.PutItemsInput,
-	context interface{},
+	cookie interface{},
 	responseChan chan *v3io.Response) (*v3io.Request, error) {
-	return c.sendRequestToWorker(putItemsInput, context, responseChan)
+	return c.sendRequestToWorker(putItemsInput, cookie, responseChan)
 }
 
 // PutItemsSync
@@ -408,9 +394,9 @@ func (c *context) PutItemsSync(putItemsInput *v3io.PutItemsInput) (*v3io.Respons
 
 // UpdateItem
 func (c *context) UpdateItem(updateItemInput *v3io.UpdateItemInput,
-	context interface{},
+	cookie interface{},
 	responseChan chan *v3io.Response) (*v3io.Request, error) {
-	return c.sendRequestToWorker(updateItemInput, context, responseChan)
+	return c.sendRequestToWorker(updateItemInput, cookie, responseChan)
 }
 
 // UpdateItemSync
@@ -447,9 +433,9 @@ func (c *context) UpdateItemSync(updateItemInput *v3io.UpdateItemInput) error {
 
 // GetObject
 func (c *context) GetObject(getObjectInput *v3io.GetObjectInput,
-	context interface{},
+	cookie interface{},
 	responseChan chan *v3io.Response) (*v3io.Request, error) {
-	return c.sendRequestToWorker(getObjectInput, context, responseChan)
+	return c.sendRequestToWorker(getObjectInput, cookie, responseChan)
 }
 
 // GetObjectSync
@@ -465,9 +451,9 @@ func (c *context) GetObjectSync(getObjectInput *v3io.GetObjectInput) (*v3io.Resp
 
 // PutObject
 func (c *context) PutObject(putObjectInput *v3io.PutObjectInput,
-	context interface{},
+	cookie interface{},
 	responseChan chan *v3io.Response) (*v3io.Request, error) {
-	return c.sendRequestToWorker(putObjectInput, context, responseChan)
+	return c.sendRequestToWorker(putObjectInput, cookie, responseChan)
 }
 
 // PutObjectSync
@@ -485,9 +471,9 @@ func (c *context) PutObjectSync(putObjectInput *v3io.PutObjectInput) error {
 
 // DeleteObject
 func (c *context) DeleteObject(deleteObjectInput *v3io.DeleteObjectInput,
-	context interface{},
+	cookie interface{},
 	responseChan chan *v3io.Response) (*v3io.Request, error) {
-	return c.sendRequestToWorker(deleteObjectInput, context, responseChan)
+	return c.sendRequestToWorker(deleteObjectInput, cookie, responseChan)
 }
 
 // DeleteObjectSync
@@ -505,9 +491,9 @@ func (c *context) DeleteObjectSync(deleteObjectInput *v3io.DeleteObjectInput) er
 
 // CreateStream
 func (c *context) CreateStream(createStreamInput *v3io.CreateStreamInput,
-	context interface{},
+	cookie interface{},
 	responseChan chan *v3io.Response) (*v3io.Request, error) {
-	return c.sendRequestToWorker(createStreamInput, context, responseChan)
+	return c.sendRequestToWorker(createStreamInput, cookie, responseChan)
 }
 
 // CreateStreamSync
@@ -529,9 +515,9 @@ func (c *context) CreateStreamSync(createStreamInput *v3io.CreateStreamInput) er
 
 // DeleteStream
 func (c *context) DeleteStream(deleteStreamInput *v3io.DeleteStreamInput,
-	context interface{},
+	cookie interface{},
 	responseChan chan *v3io.Response) (*v3io.Request, error) {
-	return c.sendRequestToWorker(deleteStreamInput, context, responseChan)
+	return c.sendRequestToWorker(deleteStreamInput, cookie, responseChan)
 }
 
 // DeleteStreamSync
@@ -569,9 +555,9 @@ func (c *context) DeleteStreamSync(deleteStreamInput *v3io.DeleteStreamInput) er
 
 // SeekShard
 func (c *context) SeekShard(seekShardInput *v3io.SeekShardInput,
-	context interface{},
+	cookie interface{},
 	responseChan chan *v3io.Response) (*v3io.Request, error) {
-	return c.sendRequestToWorker(seekShardInput, context, responseChan)
+	return c.sendRequestToWorker(seekShardInput, cookie, responseChan)
 }
 
 // SeekShardSync
@@ -620,9 +606,9 @@ func (c *context) SeekShardSync(seekShardInput *v3io.SeekShardInput) (*v3io.Resp
 
 // PutRecords
 func (c *context) PutRecords(putRecordsInput *v3io.PutRecordsInput,
-	context interface{},
+	cookie interface{},
 	responseChan chan *v3io.Response) (*v3io.Request, error) {
-	return c.sendRequestToWorker(putRecordsInput, context, responseChan)
+	return c.sendRequestToWorker(putRecordsInput, cookie, responseChan)
 }
 
 // PutRecordsSync
@@ -694,9 +680,9 @@ func (c *context) PutRecordsSync(putRecordsInput *v3io.PutRecordsInput) (*v3io.R
 
 // GetRecords
 func (c *context) GetRecords(getRecordsInput *v3io.GetRecordsInput,
-	context interface{},
+	cookie interface{},
 	responseChan chan *v3io.Response) (*v3io.Request, error) {
-	return c.sendRequestToWorker(getRecordsInput, context, responseChan)
+	return c.sendRequestToWorker(getRecordsInput, cookie, responseChan)
 }
 
 // GetRecordsSync
@@ -1030,7 +1016,7 @@ func (c *context) decodeTypedAttributes(typedAttributes map[string]map[string]in
 }
 
 func (c *context) sendRequestToWorker(input interface{},
-	context interface{},
+	cookie interface{},
 	responseChan chan *v3io.Response) (*v3io.Request, error) {
 	id := atomic.AddUint64(&requestID, 1)
 
@@ -1039,7 +1025,7 @@ func (c *context) sendRequestToWorker(input interface{},
 		Request: v3io.Request{
 			ID:                  id,
 			Input:               input,
-			Context:             context,
+			Cookie:              cookie,
 			ResponseChan:        responseChan,
 			SendTimeNanoseconds: time.Now().UnixNano(),
 		},
@@ -1108,9 +1094,23 @@ func (c *context) workerEntry(workerIndex int) {
 		response.ID = request.ID
 		response.Error = err
 		response.RequestResponse = request.RequestResponse
-		response.Context = request.Context
+		response.Cookie = request.Cookie
 
 		// write to response channel
 		request.ResponseChan <- &request.RequestResponse.Response
 	}
+}
+
+// Code from fasthttp library https://github.com/valyala/fasthttp/blob/ea427d2f448aa8abc0b139f638e80184d4b23d9d/client.go#L1596
+// For some reason, this code is skipped when a custom dial function is provided.
+func addMissingPort(addr string, isTLS bool) string {
+	n := strings.Index(addr, ":")
+	if n >= 0 {
+		return addr
+	}
+	port := 80
+	if isTLS {
+		port = 443
+	}
+	return fmt.Sprintf("%s:%d", addr, port)
 }

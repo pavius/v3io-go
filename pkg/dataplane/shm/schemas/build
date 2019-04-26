@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# put the capnpc-go binary in /bin
+export PATH=$PATH:${GOPATH}/bin
+
+capnp compile -I$GOPATH/src/github.com/iguazio/go-capnproto2/std -I$(pwd) -ogo rv3io/rv3io.capnp
+capnp compile -I$GOPATH/src/github.com/iguazio/go-capnproto2/std -I$(pwd) -ogo node/common/InterfaceType.capnp
+capnp compile -I$GOPATH/src/github.com/iguazio/go-capnproto2/std -I$(pwd) -ogo node/common/TinyData.capnp
+capnp compile -I$GOPATH/src/github.com/iguazio/go-capnproto2/std -I$(pwd) -ogo node/common/TimeSpec.capnp
+capnp compile -I$GOPATH/src/github.com/iguazio/go-capnproto2/std -I$(pwd) -ogo node/common/StringWrapper.capnp
+capnp compile -I$GOPATH/src/github.com/iguazio/go-capnproto2/std -I$(pwd) -ogo node/common/ExtAttr.capnp
+capnp compile -I$GOPATH/src/github.com/iguazio/go-capnproto2/std -I$(pwd) -ogo node/common/ExtAttrKey.capnp
+capnp compile -I$GOPATH/src/github.com/iguazio/go-capnproto2/std -I$(pwd) -ogo node/common/ExtAttrValue.capnp
+capnp compile -I$GOPATH/src/github.com/iguazio/go-capnproto2/std -I$(pwd) -ogo node/common/FileSystemAttrGetRequest.capnp
+capnp compile -I$GOPATH/src/github.com/iguazio/go-capnproto2/std -I$(pwd) -ogo node/common/FileSystemAttrGetResponse.capnp
+capnp compile -I$GOPATH/src/github.com/iguazio/go-capnproto2/std -I$(pwd) -ogo node/common/FileSystemSetAttrRequest.capnp
+capnp compile -I$GOPATH/src/github.com/iguazio/go-capnproto2/std -I$(pwd) -ogo node/common/FileAttribute.capnp

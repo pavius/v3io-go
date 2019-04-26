@@ -16,7 +16,12 @@ limitations under the License.
 
 package v3io
 
-import "github.com/valyala/fasthttp"
+import (
+	"github.com/v3io/v3io-go/pkg/dataplane/shm/job"
+	"github.com/valyala/fasthttp"
+)
+
+type RequestWriter func(interface{}, *job.JobBlock)
 
 type Request struct {
 	ID uint64
@@ -24,8 +29,8 @@ type Request struct {
 	// holds the input (e.g. ListBucketInput, GetItemInput)
 	Input interface{}
 
-	// a user supplied context
-	Context interface{}
+	// a user supplied cookie
+	Cookie interface{}
 
 	// the channel to which the response must be posted
 	ResponseChan chan *Response
@@ -35,6 +40,14 @@ type Request struct {
 
 	// Request time
 	SendTimeNanoseconds int64
+
+	// Shared memory specific
+	JobType          job.Type
+	PayloadSizeWords uint64
+	JobBlock         *job.JobBlock
+
+	// for requests that need to write the payload while they are popualating the input (zero copy)
+	Writer RequestWriter
 }
 
 type Response struct {
@@ -48,19 +61,29 @@ type Response struct {
 	// holds the error for async responses
 	Error error
 
-	// a user supplied context
-	Context interface{}
+	// a user supplied cookie
+	Cookie interface{}
 
 	// pointer to container
 	RequestResponse *RequestResponse
 
 	// HTTP
 	HTTPResponse *fasthttp.Response
+
+	// Shared memory specific
+	JobType  job.Type
+	JobBlock *job.JobBlock
+	Releaser func(*Response)
+	Err      error
 }
 
 func (r *Response) Release() {
 	if r.HTTPResponse != nil {
 		fasthttp.ReleaseResponse(r.HTTPResponse)
+	}
+
+	if r.Releaser != nil {
+		r.Releaser(r)
 	}
 }
 

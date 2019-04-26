@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/xml"
+	"os"
 	"time"
 )
 
@@ -289,4 +290,90 @@ type GetRecordsOutput struct {
 	MSecBehindLatest    int
 	RecordsBehindLatest int
 	Records             []GetRecordsResult
+}
+
+//
+// File
+//
+
+type FileOpenInput struct {
+	DataPlaneInput
+	FilePath string
+	Flags    int
+	Mode     os.FileMode
+}
+
+type FileOpenOutput struct {
+	DataPlaneOutput
+	FileHandle uint64
+}
+
+type FileCloseInput struct {
+	DataPlaneInput
+	FileHandle uint64
+}
+
+type FileWriteInput struct {
+	DataPlaneInput
+	FileHandle uint64
+	Offset     uint64
+	Data       []byte
+	Writer     RequestWriter
+}
+
+type FileWriteOutput struct {
+	DataPlaneOutput
+	BytesWritten uint64
+}
+
+type FileReadInput struct {
+	DataPlaneInput
+	FileHandle uint64
+	Offset     uint64
+	BytesCount uint64
+}
+
+type FileReadOutput struct {
+	DataPlaneOutput
+	Data []byte
+}
+
+//
+// Shm specific
+//
+
+type EchoInput struct {
+	DataPlaneInput
+	DataUint64 uint64
+	DataBytes  []byte
+}
+
+type EchoOutput struct {
+	DataPlaneOutput
+	DataUint64 uint64
+	DataBytes  []byte
+}
+
+type SessionAcquireInput struct {
+	DataPlaneInput
+	Username      string
+	Password      string
+	Label         string
+	InterfaceType uint64
+}
+
+type SessionAcquireOutput struct {
+	DataPlaneOutput
+	SessionID uint32
+}
+
+type ContainerOpenInput struct {
+	DataPlaneInput
+	ContainerID    uint64
+	ContainerAlias string
+}
+
+type ContainerOpenOutput struct {
+	DataPlaneOutput
+	ContainerHandle uint64
 }

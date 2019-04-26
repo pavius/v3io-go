@@ -103,7 +103,7 @@ func (suite *asyncObjectTestSuite) TestObject() {
 		pendingRequestIndex := pendingGetRequests[response.ID]
 
 		// verify the context
-		suite.Require().Equal(&someContext, response.Context)
+		suite.Require().Equal(&someContext, response.Cookie)
 
 		// verify that the body of the response is equal to the contents formatting with the request index
 		// as mapped from the response ID
