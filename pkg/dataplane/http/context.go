@@ -122,6 +122,16 @@ func (c *context) NewSession(newSessionInput *v3io.NewSessionInput) (v3io.Sessio
 		newSessionInput.AccessKey)
 }
 
+// Echo sends a transport echo
+func (c *context) Echo(input *v3io.EchoInput, cookie interface{}) (*v3io.Request, error) {
+	return nil, nil
+}
+
+// GetStatistics returns statistics
+func (c *context) GetStatistics() *v3io.Statistics {
+	return nil
+}
+
 // GetContainers
 func (c *context) GetContainers(getContainersInput *v3io.GetContainersInput,
 	cookie interface{},

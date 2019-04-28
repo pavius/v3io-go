@@ -17,14 +17,14 @@ type Session struct {
 	context   *Context
 }
 
-func newSession(parentLogger logger.Logger, context *Context, sessionID uint32) (*Session, error) {
+func newSession(parentLogger logger.Logger, context *Context) (*Session, error) {
 	log := parentLogger.GetChild("session").(logger.Logger)
 
-	log.DebugWith("Session acquired", "sessionID", sessionID)
+	log.DebugWith("Session acquired")
 
+	// TODO: handle user/password/access-key
 	newSession := &Session{
 		logger:    log,
-		sessionID: sessionID,
 		context:   context,
 	}
 
@@ -38,8 +38,10 @@ func (c *Container) GetContext() *Context {
 	return c.context
 }
 
-func (s *Session) NewContainer(containerHandler uint64) (*Container, error) {
-	return newContainer(s.logger, s, containerHandler)
+func (s *Session) NewContainer(input *v3io.NewContainerInput) (v3io.Container, error) {
+
+	// TODO: return newContainer(s.logger, s, )
+	return nil, nil
 }
 
 func (s *Session) ContainerOpen(input *v3io.ContainerOpenInput, cookie interface{}) (*v3io.Request, error) {
@@ -59,7 +61,9 @@ func (s *Session) ContainerOpenSync(input *v3io.ContainerOpenInput) (*Container,
 	defer response.Release()
 
 	// create session
-	return s.NewContainer(response.Output.(*v3io.ContainerOpenOutput).ContainerHandle)
+	// return s.NewContainer(response.Output.(*v3io.ContainerOpenOutput).ContainerHandle)
+
+	return nil, nil
 }
 
 func (s *Session) encodeContainerOpenInput(input interface{}, jobBlock *job.JobBlock) error {

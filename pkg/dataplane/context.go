@@ -19,6 +19,12 @@ package v3io
 type Context interface {
 	Container
 
-	// create a new session
+	// NewSession creates a session object
 	NewSession(*NewSessionInput) (Session, error)
+
+	// Echo sends a transport echo
+	Echo(*EchoInput, interface{}) (*Request, error)
+
+	// GetStatistics returns statistics
+	GetStatistics() *Statistics
 }

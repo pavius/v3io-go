@@ -23,17 +23,7 @@ const (
 	maxInflightRequests = 16 * 1024
 )
 
-type Statistics struct {
-	NumCommandsProduced     uint64
-	NumCommandsConsumed     uint64
-	NumAllocationRequests   uint64
-	NumAllocationResponses  uint64
-	NumJobRequests          uint64
-	NumJobResponses         uint64
-	NumDeallocationRequests uint64
-}
-
-type Context struct {
+type context struct {
 	logger                  logger.Logger
 	consumerQuervo          *quervo.Quervo
 	producerQuervo          *quervo.Quervo
@@ -47,10 +37,10 @@ type Context struct {
 	fixedArena              *fixed_arena.FixedArena
 	inputEncoderByJobType   [job.TYPE_MAX]func(interface{}, *job.JobBlock) error
 	outputDecoderByJobType  [job.TYPE_MAX]func(*job.JobBlock, *v3io.Response) error
-	statistics              Statistics
+	statistics              v3io.Statistics
 }
 
-func NewContext(parentLogger logger.Logger, daemonAddr string) (*Context, error) {
+func NewContext(parentLogger logger.Logger, daemonAddr string) (*context, error) {
 	var err error
 
 	responseReceiver, err := rspreceiver.NewResponseReceiver(parentLogger)
@@ -58,7 +48,7 @@ func NewContext(parentLogger logger.Logger, daemonAddr string) (*Context, error)
 		return nil, errors.Wrap(err, "Failed to create response receiver")
 	}
 
-	newContext := &Context{
+	newcontext := &context{
 		logger:                  parentLogger.GetChild("ctx").(logger.Logger),
 		consumerQuervo:          quervo.NewQuervo(parentLogger, "consumer"),
 		producerQuervo:          quervo.NewQuervo(parentLogger, "producer"),
@@ -68,38 +58,38 @@ func NewContext(parentLogger logger.Logger, daemonAddr string) (*Context, error)
 		requestResponsePool:     reqrsppool.NewRequestResponsePool(maxInflightRequests),
 	}
 
-	newContext.cdi, err = cdi.NewCdi(newContext.logger, daemonAddr)
+	newcontext.cdi, err = cdi.NewCdi(newcontext.logger, daemonAddr)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create CDI")
 	}
 
 	// create a channel
-	newContext.channelInfo, err = newContext.cdi.CreateChannel()
+	newcontext.channelInfo, err = newcontext.cdi.CreateChannel()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create channel")
 	}
 
-	if err = newContext.attachQuervos(); err != nil {
+	if err = newcontext.attachQuervos(); err != nil {
 		return nil, errors.Wrap(err, "Failed to attach quervos")
 	}
 
-	if err = newContext.attachHeaps(); err != nil {
+	if err = newcontext.attachHeaps(); err != nil {
 		return nil, errors.Wrap(err, "Failed to attach heaps")
 	}
 
-	// attach quervo to response receiver. all responses from quervo will be written to newContext.responseItemChan
-	newContext.responseReceiver.RegisterQuervo(newContext.consumerQuervo, newContext.responseItemRingBuffer)
+	// attach quervo to response receiver. all responses from quervo will be written to newcontext.responseItemChan
+	newcontext.responseReceiver.RegisterQuervo(newcontext.consumerQuervo, newcontext.responseItemRingBuffer)
 
 	// populate ID and request pool
-	if err = newContext.populatePools(); err != nil {
+	if err = newcontext.populatePools(); err != nil {
 		return nil, errors.Wrap(err, "Failed to populate pools")
 	}
 
 	// populate encoders/decoders
-	newContext.populateEncoderDecoderLookup()
+	newcontext.populateEncoderDecoderLookup()
 
 	// create a capnp arena that doesn't allocate
-	newContext.fixedArena, err = fixed_arena.NewFixedArena()
+	newcontext.fixedArena, err = fixed_arena.NewFixedArena()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create fixed arena")
 	}
@@ -107,16 +97,18 @@ func NewContext(parentLogger logger.Logger, daemonAddr string) (*Context, error)
 	// start the response receiver
 	responseReceiver.Start()
 
-	newContext.logger.DebugWith("Created", "channelInfo", newContext.channelInfo)
+	newcontext.logger.DebugWith("Created", "channelInfo", newcontext.channelInfo)
 
-	return newContext, nil
+	return newcontext, nil
 }
 
-func (c *Context) NewSession(sessionID uint32) (*Session, error) {
-	return newSession(c.logger, c, sessionID)
+func (c *context) NewSession(input *v3io.NewSessionInput) (v3io.Session, error) {
+
+	// TODO: pass username/password/access key
+	return newSession(c.logger, c)
 }
 
-func (c *Context) GetNextResponse() *v3io.Response {
+func (c *context) GetNextResponse() *v3io.Response {
 	var response *v3io.Response
 
 	// while we haven't received a response
@@ -144,15 +136,15 @@ func (c *Context) GetNextResponse() *v3io.Response {
 	return response
 }
 
-func (c *Context) GetStatistics() *Statistics {
+func (c *context) GetStatistics() *v3io.Statistics {
 	return &c.statistics
 }
 
-func (c *Context) SessionAcquire(input *v3io.SessionAcquireInput, cookie interface{}) (*v3io.Request, error) {
+func (c *context) SessionAcquire(input *v3io.SessionAcquireInput, cookie interface{}) (*v3io.Request, error) {
 	return c.createAndSubmitJob(input, cookie, job.TYPE_SESSION_ACQUIRE, 0, nil)
 }
 
-func (sc *Context) SessionAcquireSync(input *v3io.SessionAcquireInput) (*Session, error) {
+func (sc *context) SessionAcquireSync(input *v3io.SessionAcquireInput) (v3io.Session, error) {
 	//if sc.context.numInflightRequests > 0 {
 	//	return errors.New("Can't submit synchronous response while requests are in flight")
 	//}
@@ -168,15 +160,166 @@ func (sc *Context) SessionAcquireSync(input *v3io.SessionAcquireInput) (*Session
 	return sc.NewSession(response.Output.(*v3io.SessionAcquireOutput).SessionID)
 }
 
-func (c *Context) Echo(input *v3io.EchoInput, cookie interface{}) (*v3io.Request, error) {
+func (c *context) Echo(input *v3io.EchoInput, cookie interface{}) (*v3io.Request, error) {
 	return c.createAndSubmitJob(input, cookie, job.TYPE_ECHO, 0, nil)
 }
 
-func (c *Context) EchoCommand(input *v3io.EchoInput, cookie interface{}) (*v3io.Request, error) {
+func (c *context) EchoCommand(input *v3io.EchoInput, cookie interface{}) (*v3io.Request, error) {
 	return c.createAndSubmitJob(input, cookie, job.TYPE_ECHO, 0, nil)
 }
 
-func (c *Context) encodeSessionAcquireInput(input interface{}, jobBlock *job.JobBlock) error {
+// GetContainers
+func (c *context) GetContainers(*v3io.GetContainersInput, interface{}, chan *v3io.Response) (*v3io.Request, error) {
+	return nil, nil
+}
+
+// GetContainersSync
+func (c *context) GetContainersSync(*v3io.GetContainersInput) (*v3io.Response, error) {
+	return nil, nil
+}
+
+// GetContainers
+func (c *context) GetContainerContents(*v3io.GetContainerContentsInput, interface{}, chan *v3io.Response) (*v3io.Request, error) {
+	return nil, nil
+}
+
+// GetContainerContentsSync
+func (c *context) GetContainerContentsSync(*v3io.GetContainerContentsInput) (*v3io.Response, error) {
+	return nil, nil
+}
+
+// GetObject
+func (c *context) GetObject(*v3io.GetObjectInput, interface{}, chan *v3io.Response) (*v3io.Request, error) {
+	return nil, nil
+}
+
+// GetObjectSync
+func (c *context) GetObjectSync(*v3io.GetObjectInput) (*v3io.Response, error) {
+	return nil, nil
+}
+
+// PutObject
+func (c *context) PutObject(*v3io.PutObjectInput, interface{}, chan *v3io.Response) (*v3io.Request, error) {
+	return nil, nil
+}
+
+// PutObjectSync
+func (c *context) PutObjectSync(*v3io.PutObjectInput) error {
+	return nil
+}
+
+// DeleteObject
+func (c *context) DeleteObject(*v3io.DeleteObjectInput, interface{}, chan *v3io.Response) (*v3io.Request, error) {
+	return nil, nil
+}
+
+// DeleteObjectSync
+func (c *context) DeleteObjectSync(*v3io.DeleteObjectInput) error {
+	return nil
+}
+
+// GetItem
+func (c *context) GetItem(*v3io.GetItemInput, interface{}, chan *v3io.Response) (*v3io.Request, error) {
+	return nil, nil
+}
+
+// GetItemSync
+func (c *context) GetItemSync(*v3io.GetItemInput) (*v3io.Response, error) {
+	return nil, nil
+}
+
+// GetItems
+func (c *context) GetItems(*v3io.GetItemsInput, interface{}, chan *v3io.Response) (*v3io.Request, error) {
+	return nil, nil
+}
+
+// GetItemSync
+func (c *context) GetItemsSync(*v3io.GetItemsInput) (*v3io.Response, error) {
+	return nil, nil
+}
+
+// PutItem
+func (c *context) PutItem(*v3io.PutItemInput, interface{}, chan *v3io.Response) (*v3io.Request, error) {
+	return nil, nil
+}
+
+// PutItemSync
+func (c *context) PutItemSync(*v3io.PutItemInput) error {
+	return nil
+}
+
+// PutItems
+func (c *context) PutItems(*v3io.PutItemsInput, interface{}, chan *v3io.Response) (*v3io.Request, error) {
+	return nil, nil
+}
+
+// PutItemsSync
+func (c *context) PutItemsSync(*v3io.PutItemsInput) (*v3io.Response, error) {
+	return nil, nil
+}
+
+// UpdateItem
+func (c *context) UpdateItem(*v3io.UpdateItemInput, interface{}, chan *v3io.Response) (*v3io.Request, error) {
+	return nil, nil
+}
+
+// UpdateItemSync
+func (c *context) UpdateItemSync(*v3io.UpdateItemInput) error {
+	return nil
+}
+
+// CreateStream
+func (c *context) CreateStream(*v3io.CreateStreamInput, interface{}, chan *v3io.Response) (*v3io.Request, error) {
+	return nil, nil
+}
+
+// CreateStreamSync
+func (c *context) CreateStreamSync(*v3io.CreateStreamInput) error {
+	return nil
+}
+
+// DeleteStream
+func (c *context) DeleteStream(*v3io.DeleteStreamInput, interface{}, chan *v3io.Response) (*v3io.Request, error) {
+	return nil, nil
+}
+
+// DeleteStreamSync
+func (c *context) DeleteStreamSync(*v3io.DeleteStreamInput) error {
+	return nil
+}
+
+// SeekShard
+func (c *context) SeekShard(*v3io.SeekShardInput, interface{}, chan *v3io.Response) (*v3io.Request, error) {
+	return nil, nil
+}
+
+// SeekShardSync
+func (c *context) SeekShardSync(*v3io.SeekShardInput) (*v3io.Response, error) {
+	return nil, nil
+}
+
+// PutRecords
+func (c *context) PutRecords(*v3io.PutRecordsInput, interface{}, chan *v3io.Response) (*v3io.Request, error) {
+	return nil, nil
+}
+
+// PutRecordsSync
+func (c *context) PutRecordsSync(*v3io.PutRecordsInput) (*v3io.Response, error) {
+	return nil, nil
+}
+
+// GetRecords
+func (c *context) GetRecords(*v3io.GetRecordsInput, interface{}, chan *v3io.Response) (*v3io.Request, error) {
+	return nil, nil
+}
+
+// GetRecordsSync
+func (c *context) GetRecordsSync(*v3io.GetRecordsInput) (*v3io.Response, error) {
+	return nil, nil
+}
+
+
+func (c *context) encodeSessionAcquireInput(input interface{}, jobBlock *job.JobBlock) error {
 	sessionAcquireInput := input.(*v3io.SessionAcquireInput)
 
 	rv3ioRequest, err := c.createRv3ioRequest(jobBlock, nil, nil)
@@ -209,7 +352,7 @@ func (c *Context) encodeSessionAcquireInput(input interface{}, jobBlock *job.Job
 	return nil
 }
 
-func (c *Context) decodeSessionAcquireOutput(jobBlock *job.JobBlock, response *v3io.Response) error {
+func (c *context) decodeSessionAcquireOutput(jobBlock *job.JobBlock, response *v3io.Response) error {
 	sessionAcquireOutput := v3io.SessionAcquireOutput{}
 
 	// set the response header has the arena buffer
@@ -242,7 +385,7 @@ func (c *Context) decodeSessionAcquireOutput(jobBlock *job.JobBlock, response *v
 	return nil
 }
 
-func (c *Context) encodeEchoInput(input interface{}, jobBlock *job.JobBlock) error {
+func (c *context) encodeEchoInput(input interface{}, jobBlock *job.JobBlock) error {
 	echoInput := input.(*v3io.EchoInput)
 
 	// copy the request header
@@ -254,7 +397,7 @@ func (c *Context) encodeEchoInput(input interface{}, jobBlock *job.JobBlock) err
 	return nil
 }
 
-func (c *Context) decodeEchoOutput(jobBlock *job.JobBlock, response *v3io.Response) error {
+func (c *context) decodeEchoOutput(jobBlock *job.JobBlock, response *v3io.Response) error {
 	responseHeader := jobBlock.GetResponseHeaderBuffer()
 
 	echoOutput := v3io.EchoOutput{
@@ -270,7 +413,7 @@ func (c *Context) decodeEchoOutput(jobBlock *job.JobBlock, response *v3io.Respon
 	return nil
 }
 
-func (c *Context) createAndSubmitJob(input interface{},
+func (c *context) createAndSubmitJob(input interface{},
 	cookie interface{},
 	jobType job.Type,
 	payloadSizeBytes int,
@@ -295,7 +438,7 @@ func (c *Context) createAndSubmitJob(input interface{},
 	return c.submitRequestViaJob(&requestResponse.Request)
 }
 
-func (c *Context) createRv3ioRequest(jobBlock *job.JobBlock,
+func (c *context) createRv3ioRequest(jobBlock *job.JobBlock,
 	sessionID *uint32,
 	containerHandle *uint64) (rv3ioRequest rv3io_capnp.Rv3ioRequest, err error) {
 
@@ -334,7 +477,7 @@ func (c *Context) createRv3ioRequest(jobBlock *job.JobBlock,
 	return
 }
 
-func (c *Context) marshalRv3ioRequest(jobBlock *job.JobBlock) {
+func (c *context) marshalRv3ioRequest(jobBlock *job.JobBlock) {
 
 	// marshal the request (just updates stuff in the header)
 	buf := c.fixedArena.MarshalEncodeBuffer()
@@ -343,7 +486,7 @@ func (c *Context) marshalRv3ioRequest(jobBlock *job.JobBlock) {
 	jobBlock.Header.RequestHeaderSectionSizeBytes = uint32(len(buf))
 }
 
-func (c *Context) attachQuervos() error {
+func (c *context) attachQuervos() error {
 
 	if err := c.consumerQuervo.Attach(c.channelInfo.ProducerShmPath); err != nil {
 		return errors.Wrap(err, "Failed to attach consumer quervo")
@@ -356,7 +499,7 @@ func (c *Context) attachQuervos() error {
 	return nil
 }
 
-func (c *Context) attachHeaps() error {
+func (c *context) attachHeaps() error {
 
 	for _, heapShmPath := range c.channelInfo.HeapShmPaths {
 
@@ -372,7 +515,7 @@ func (c *Context) attachHeaps() error {
 	return nil
 }
 
-func (c *Context) populatePools() error {
+func (c *context) populatePools() error {
 	var requestID uint64
 
 	for requestID = maxInflightRequests; requestID != 0; requestID-- {
@@ -392,7 +535,7 @@ func (c *Context) populatePools() error {
 	return nil
 }
 
-func (c *Context) handleAllocationResponse(responseItem uint64) *v3io.Response {
+func (c *context) handleAllocationResponse(responseItem uint64) *v3io.Response {
 	var allocationResponse command.AllocationResponse
 	var jobRequest command.JobRequest
 
@@ -448,7 +591,7 @@ func (c *Context) handleAllocationResponse(responseItem uint64) *v3io.Response {
 	return nil
 }
 
-func (c *Context) handleJobResponse(responseItem uint64) *v3io.Response {
+func (c *context) handleJobResponse(responseItem uint64) *v3io.Response {
 	var jobResponse command.JobResponse
 	jobResponse.Decode(responseItem)
 
@@ -475,7 +618,7 @@ func (c *Context) handleJobResponse(responseItem uint64) *v3io.Response {
 	return &requestResponse.Response
 }
 
-func (c *Context) submitRequestViaJob(request *v3io.Request) (*v3io.Request, error) {
+func (c *context) submitRequestViaJob(request *v3io.Request) (*v3io.Request, error) {
 
 	// save request in pending requests based on id
 	c.pendingRequestResponses[request.ID] = request.RequestResponse
@@ -496,13 +639,13 @@ func (c *Context) submitRequestViaJob(request *v3io.Request) (*v3io.Request, err
 	return request, nil
 }
 
-func (c *Context) writeRequestToJobBlock(request *v3io.Request, jobBlock *job.JobBlock) error {
+func (c *context) writeRequestToJobBlock(request *v3io.Request, jobBlock *job.JobBlock) error {
 
 	// call the encoder
 	return c.inputEncoderByJobType[request.JobType](request.Input, jobBlock)
 }
 
-func (c *Context) readResponseFromJobBlock(response *v3io.Response, jobBlock *job.JobBlock) error {
+func (c *context) readResponseFromJobBlock(response *v3io.Response, jobBlock *job.JobBlock) error {
 
 	// if there's an error, create an error for it
 	if jobBlock.Header.Result != 0 {
@@ -520,7 +663,7 @@ func (c *Context) readResponseFromJobBlock(response *v3io.Response, jobBlock *jo
 	return nil
 }
 
-func (c *Context) releaseResponse(response *v3io.Response) {
+func (c *context) releaseResponse(response *v3io.Response) {
 
 	// initialize allocation command
 	deallocationRequestCommand := command.DeallocationRequest{
@@ -541,7 +684,7 @@ func (c *Context) releaseResponse(response *v3io.Response) {
 	c.jobBlockAttachers[response.JobBlock.Header.HeapIdx].ReleaseJob(response.JobBlock)
 }
 
-func (c *Context) populateEncoderDecoderLookup() {
+func (c *context) populateEncoderDecoderLookup() {
 
 	codecs := map[job.Type]struct {
 		encoder func(interface{}, *job.JobBlock) error
@@ -557,7 +700,7 @@ func (c *Context) populateEncoderDecoderLookup() {
 	}
 }
 
-func (c *Context) waitForSyncResponse(request *v3io.Request, submitError error) (*v3io.Response, error) {
+func (c *context) waitForSyncResponse(request *v3io.Request, submitError error) (*v3io.Response, error) {
 	if submitError != nil {
 		return nil, errors.Wrap(submitError, "Failed to submit")
 	}

@@ -62,6 +62,17 @@ type DataPlaneOutput struct {
 	ctx context.Context
 }
 
+// TODO: probably make this transport specific
+type Statistics struct {
+	NumCommandsProduced     uint64
+	NumCommandsConsumed     uint64
+	NumAllocationRequests   uint64
+	NumAllocationResponses  uint64
+	NumJobRequests          uint64
+	NumJobResponses         uint64
+	NumDeallocationRequests uint64
+}
+
 //
 // Container
 //
