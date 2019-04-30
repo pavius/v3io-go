@@ -13,7 +13,7 @@ import (
 
 type Session struct {
 	logger    logger.Logger
-	sessionID uint32
+	accessKey []byte
 	context   *Context
 }
 

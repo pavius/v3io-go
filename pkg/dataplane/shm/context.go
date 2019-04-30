@@ -48,7 +48,7 @@ func NewContext(parentLogger logger.Logger, daemonAddr string) (*context, error)
 		return nil, errors.Wrap(err, "Failed to create response receiver")
 	}
 
-	newcontext := &context{
+	newContext := &context{
 		logger:                  parentLogger.GetChild("ctx").(logger.Logger),
 		consumerQuervo:          quervo.NewQuervo(parentLogger, "consumer"),
 		producerQuervo:          quervo.NewQuervo(parentLogger, "producer"),
@@ -58,38 +58,38 @@ func NewContext(parentLogger logger.Logger, daemonAddr string) (*context, error)
 		requestResponsePool:     reqrsppool.NewRequestResponsePool(maxInflightRequests),
 	}
 
-	newcontext.cdi, err = cdi.NewCdi(newcontext.logger, daemonAddr)
+	newContext.cdi, err = cdi.NewCdi(newContext.logger, daemonAddr)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create CDI")
 	}
 
 	// create a channel
-	newcontext.channelInfo, err = newcontext.cdi.CreateChannel()
+	newContext.channelInfo, err = newContext.cdi.CreateChannel()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create channel")
 	}
 
-	if err = newcontext.attachQuervos(); err != nil {
+	if err = newContext.attachQuervos(); err != nil {
 		return nil, errors.Wrap(err, "Failed to attach quervos")
 	}
 
-	if err = newcontext.attachHeaps(); err != nil {
+	if err = newContext.attachHeaps(); err != nil {
 		return nil, errors.Wrap(err, "Failed to attach heaps")
 	}
 
-	// attach quervo to response receiver. all responses from quervo will be written to newcontext.responseItemChan
-	newcontext.responseReceiver.RegisterQuervo(newcontext.consumerQuervo, newcontext.responseItemRingBuffer)
+	// attach quervo to response receiver. all responses from quervo will be written to newContext.responseItemChan
+	newContext.responseReceiver.RegisterQuervo(newContext.consumerQuervo, newContext.responseItemRingBuffer)
 
 	// populate ID and request pool
-	if err = newcontext.populatePools(); err != nil {
+	if err = newContext.populatePools(); err != nil {
 		return nil, errors.Wrap(err, "Failed to populate pools")
 	}
 
 	// populate encoders/decoders
-	newcontext.populateEncoderDecoderLookup()
+	newContext.populateEncoderDecoderLookup()
 
 	// create a capnp arena that doesn't allocate
-	newcontext.fixedArena, err = fixed_arena.NewFixedArena()
+	newContext.fixedArena, err = fixed_arena.NewFixedArena()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create fixed arena")
 	}
@@ -97,15 +97,15 @@ func NewContext(parentLogger logger.Logger, daemonAddr string) (*context, error)
 	// start the response receiver
 	responseReceiver.Start()
 
-	newcontext.logger.DebugWith("Created", "channelInfo", newcontext.channelInfo)
+	newContext.logger.DebugWith("Created", "channelInfo", newContext.channelInfo)
 
-	return newcontext, nil
+	return newContext, nil
 }
 
 func (c *context) NewSession(input *v3io.NewSessionInput) (v3io.Session, error) {
 
 	// TODO: pass username/password/access key
-	return newSession(c.logger, c)
+	return newSession(c.logger, c, input.AccessKey)
 }
 
 func (c *context) GetNextResponse() *v3io.Response {
