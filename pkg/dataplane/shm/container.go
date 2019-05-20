@@ -14,7 +14,7 @@ type Container struct {
 	logger            logger.Logger
 	containerHandle   uint64
 	session           *Session
-	context           *Context
+	context           *context
 	fileReadRequest   *inplace.FileReadRequest
 	fileReadResponse  *inplace.FileReadResponse
 	fileWriteRequest  *inplace.FileWriteRequest
@@ -208,7 +208,8 @@ func (c *Container) encodeFileWriteInput(input interface{}, jobBlock *job.JobBlo
 	// use inplace
 	c.fileWriteRequest.SetBuffer(jobBlock.GetRequestHeaderBuffer())
 
-	*c.fileWriteRequest.SessionID = c.session.sessionID
+	// TODO: set session id
+	*c.fileWriteRequest.SessionID = 0
 	*c.fileWriteRequest.ContainerHandle = c.containerHandle
 	*c.fileWriteRequest.FileHandle = fileWriteInput.FileHandle
 	*c.fileWriteRequest.Offset = fileWriteInput.Offset
@@ -249,7 +250,8 @@ func (c *Container) encodeFileReadInput(input interface{}, jobBlock *job.JobBloc
 	// use inplace
 	c.fileReadRequest.SetBuffer(jobBlock.GetRequestHeaderBuffer())
 
-	*c.fileReadRequest.SessionID = c.session.sessionID
+	// TODO: set session id
+	*c.fileReadRequest.SessionID = 0
 	*c.fileReadRequest.ContainerHandle = c.containerHandle
 	*c.fileReadRequest.FileHandle = fileReadInput.FileHandle
 	*c.fileReadRequest.Offset = fileReadInput.Offset

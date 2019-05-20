@@ -14,10 +14,10 @@ import (
 type Session struct {
 	logger    logger.Logger
 	accessKey []byte
-	context   *Context
+	context   *context
 }
 
-func newSession(parentLogger logger.Logger, context *Context) (*Session, error) {
+func newSession(parentLogger logger.Logger, context *context) (*Session, error) {
 	log := parentLogger.GetChild("session").(logger.Logger)
 
 	log.DebugWith("Session acquired")
@@ -34,7 +34,7 @@ func newSession(parentLogger logger.Logger, context *Context) (*Session, error) 
 	return newSession, nil
 }
 
-func (c *Container) GetContext() *Context {
+func (c *Container) Getcontext() *context {
 	return c.context
 }
 
@@ -120,7 +120,10 @@ func (s *Session) decodeContainerOpenOutput(jobBlock *job.JobBlock, response *v3
 func (s *Session) createRv3ioRequest(jobBlock *job.JobBlock,
 	containerHandle *uint64) (rv3ioRequest rv3io_capnp.Rv3ioRequest, err error) {
 
-	return s.context.createRv3ioRequest(jobBlock, &s.sessionID, containerHandle)
+	// TODO: replace session ID
+	return s.context.createRv3ioRequest(jobBlock,
+		nil,
+		containerHandle)
 }
 
 func (s *Session) populateEncoderDecoderLookup() {

@@ -40,7 +40,7 @@ type context struct {
 	statistics              v3io.Statistics
 }
 
-func NewContext(parentLogger logger.Logger, daemonAddr string) (*context, error) {
+func NewContext(parentLogger logger.Logger, daemonAddr string) (v3io.Context, error) {
 	var err error
 
 	responseReceiver, err := rspreceiver.NewResponseReceiver(parentLogger)
@@ -104,8 +104,25 @@ func NewContext(parentLogger logger.Logger, daemonAddr string) (*context, error)
 
 func (c *context) NewSession(input *v3io.NewSessionInput) (v3io.Session, error) {
 
+	//if sc.context.numInflightRequests > 0 {
+	//	return errors.New("Can't submit synchronous response while requests are in flight")
+	//}
+
+	// TODO: do something with the response
+	response, err := c.waitForSyncResponse(c.createAndSubmitJob(input,
+		nil,
+		job.TYPE_SESSION_ACQUIRE,
+		0,
+		nil))
+
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to acquire session (sync)")
+	}
+
+	defer response.Release()
+
 	// TODO: pass username/password/access key
-	return newSession(c.logger, c, input.AccessKey)
+	return newSession(c.logger, c)
 }
 
 func (c *context) GetNextResponse() *v3io.Response {
@@ -138,26 +155,6 @@ func (c *context) GetNextResponse() *v3io.Response {
 
 func (c *context) GetStatistics() *v3io.Statistics {
 	return &c.statistics
-}
-
-func (c *context) SessionAcquire(input *v3io.SessionAcquireInput, cookie interface{}) (*v3io.Request, error) {
-	return c.createAndSubmitJob(input, cookie, job.TYPE_SESSION_ACQUIRE, 0, nil)
-}
-
-func (sc *context) SessionAcquireSync(input *v3io.SessionAcquireInput) (v3io.Session, error) {
-	//if sc.context.numInflightRequests > 0 {
-	//	return errors.New("Can't submit synchronous response while requests are in flight")
-	//}
-
-	response, err := sc.waitForSyncResponse(sc.SessionAcquire(input, nil))
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to acquire session (sync)")
-	}
-
-	defer response.Release()
-
-	// create session
-	return sc.NewSession(response.Output.(*v3io.SessionAcquireOutput).SessionID)
 }
 
 func (c *context) Echo(input *v3io.EchoInput, cookie interface{}) (*v3io.Request, error) {

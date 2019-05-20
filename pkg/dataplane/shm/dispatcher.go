@@ -12,11 +12,11 @@ type ResponseHandler func(*v3io.Response) error
 
 type Dispatcher struct {
 	logger              logger.Logger
-	context             *Context
+	context             *context
 	responseHandlerByID []ResponseHandler
 }
 
-func NewDispatcher(parentLogger logger.Logger, context *Context, maxInflightRequests int) (*Dispatcher, error) {
+func NewDispatcher(parentLogger logger.Logger, context *context, maxInflightRequests int) (*Dispatcher, error) {
 	loggerInstance := parentLogger.GetChild("dispatcher").(logger.Logger)
 
 	loggerInstance.DebugWith("Created", "maxInflightRequests", maxInflightRequests)
