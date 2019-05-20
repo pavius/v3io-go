@@ -23,7 +23,6 @@ import (
 
 // ControlplaneSession allows operations over a controlplane session
 type Session interface {
-
 	// CreateUser creates a user (blocking)
 	CreateUserSync(*CreateUserInput) (*CreateUserOutput, error)
 
@@ -37,7 +36,16 @@ type Session interface {
 	DeleteContainerSync(*DeleteContainerInput) error
 
 	// UpdateClusterInfo updates a cluster info record (blocking)
-	UpdateClusterInfoSync(*UpdateClusterInfoInput) (*UpdateCluserInfoOutput, error)
+	UpdateClusterInfoSync(*UpdateClusterInfoInput) (*UpdateClusterInfoOutput, error)
+
+	// CreateEvent emits new event
+	CreateEventSync(*CreateEventInput) error
+
+	// CreateAccessKeySync creates an access key (blocking)
+	CreateAccessKeySync(*CreateAccessKeyInput) (*CreateAccessKeyOutput, error)
+
+	// DeleteAccessKeySync deletes an access key (blocking)
+	DeleteAccessKeySync(*DeleteAccessKeyInput) error
 }
 
 type ControlPlaneInput struct {
@@ -100,8 +108,31 @@ type UpdateClusterInfoInput struct {
 	ClusterInfoAttributes
 }
 
-// UpdateCluserInfoOutput holds the response from updating a cluster info
-type UpdateCluserInfoOutput struct {
+// UpdateClusterInfoOutput holds the response from updating a cluster info
+type UpdateClusterInfoOutput struct {
 	ControlPlaneOutput
 	ClusterInfoAttributes
+}
+
+// CreateEventInput specifies how to create an event
+type CreateEventInput struct {
+	ControlPlaneInput
+	EventAttributes
+}
+
+// CreateAccessKeyInput specifies how to create an access key
+type CreateAccessKeyInput struct {
+	ControlPlaneInput
+	AccessKeyAttributes
+}
+
+// CreateAccessKeyOutput holds the response from creating an access key
+type CreateAccessKeyOutput struct {
+	ControlPlaneOutput
+	AccessKeyAttributes
+}
+
+// DeleteAccessKeyInput specifies how to delete an access key
+type DeleteAccessKeyInput struct {
+	ControlPlaneInput
 }

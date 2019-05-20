@@ -137,8 +137,44 @@ func (suite *githubClientSuite) TestCreateSessionWithBadPassword() {
 	newSessionInput.Endpoints = []string{os.Getenv("V3IO_CONTROLPLANE_URL")}
 
 	session, err := v3iochttp.NewSession(suite.logger, &newSessionInput)
-	suite.Equal(401, err.(*v3ioerrors.ErrorWithStatusCode).StatusCode())
+	suite.Equal(401, err.(v3ioerrors.ErrorWithStatusCode).StatusCode())
 	suite.Require().Nil(session)
+}
+
+func (suite *githubClientSuite) TestCreateEventUsingAccessKey() {
+
+	// Create new access key
+	createAccessKeyInput := v3ioc.CreateAccessKeyInput{}
+	createAccessKeyInput.Ctx = suite.ctx
+	createAccessKeyInput.Label = "test_access_key_label"
+	createAccessKeyInput.Plane = v3ioc.ControlPlane
+
+	createAccessKeyOutput, err := suite.session.CreateAccessKeySync(&createAccessKeyInput)
+	suite.Require().NoError(err)
+	suite.Require().Equal(createAccessKeyOutput.Label, createAccessKeyInput.Label)
+
+	// Create new session from access key
+	newSessionInput := v3ioc.NewSessionInput{}
+	newSessionInput.AccessKey = createAccessKeyOutput.ID
+	newSessionInput.Endpoints = []string{os.Getenv("V3IO_CONTROLPLANE_URL")}
+	accessKeySession, err := v3iochttp.NewSession(suite.logger, &newSessionInput)
+	suite.Require().NoError(err)
+
+	// Emit event
+	createEventInput := v3ioc.CreateEventInput{}
+	createEventInput.Ctx = suite.ctx
+	createEventInput.Kind = "AppService.Test.Event"
+	createEventInput.Source = "DummyService"
+
+	err = accessKeySession.CreateEventSync(&createEventInput)
+	suite.Require().NoError(err)
+
+	// Delete access key
+	deleteAccessKeyInput := v3ioc.DeleteAccessKeyInput{}
+	deleteAccessKeyInput.ID = createAccessKeyOutput.ID
+	deleteAccessKeyInput.Ctx = suite.ctx
+	err = suite.session.DeleteAccessKeySync(&deleteAccessKeyInput)
+	suite.Require().NoError(err)
 }
 
 func TestGithubClientTestSuite(t *testing.T) {
