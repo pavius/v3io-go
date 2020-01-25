@@ -31,9 +31,9 @@ import (
 //
 
 type NewContextInput struct {
-	Client         *fasthttp.Client
-	NumWorkers     int
-	RequestChanLen int
+	Client            *fasthttp.Client
+	NumWorkers        int
+	RequestChanLen    int
 	InactivityTimeout time.Duration
 }
 

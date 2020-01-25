@@ -35,11 +35,11 @@ var requestID uint64
 var ErrContextStopped = errors.New("Context stopped")
 
 type context struct {
-	logger           logger.Logger
-	requestChan      chan *v3io.Request
-	httpClient       *fasthttp.Client
-	clusterEndpoints []string
-	numWorkers       int
+	logger            logger.Logger
+	requestChan       chan *v3io.Request
+	httpClient        *fasthttp.Client
+	clusterEndpoints  []string
+	numWorkers        int
 	inactivityTimer   *time.Timer
 	inactivityTimeout time.Duration
 }
@@ -78,10 +78,10 @@ func NewContext(parentLogger logger.Logger, client *fasthttp.Client, newContextI
 	}
 
 	newContext := &context{
-		logger:      parentLogger.GetChild("context.http"),
-		httpClient:  client,
-		requestChan: make(chan *v3io.Request, requestChanLen),
-		numWorkers:  numWorkers,
+		logger:            parentLogger.GetChild("context.http"),
+		httpClient:        client,
+		requestChan:       make(chan *v3io.Request, requestChanLen),
+		numWorkers:        numWorkers,
 		inactivityTimeout: newContextInput.InactivityTimeout,
 	}
 
@@ -784,7 +784,6 @@ func (c *context) updateItemWithExpression(dataPlaneInput *v3io.DataPlaneInput,
 		body["UpdateMode"] = updateMode
 	}
 
-
 	if condition != "" {
 		body["ConditionExpression"] = condition
 	}
@@ -1389,20 +1388,6 @@ func (c *context) getItemsParseCAPNPResponse(response *v3io.Response, withWildca
 		getItemsOutput.Items = append(getItemsOutput.Items, ditem)
 	}
 	return &getItemsOutput, nil
-}
-
-// Code from fasthttp library https://github.com/valyala/fasthttp/blob/ea427d2f448aa8abc0b139f638e80184d4b23d9d/client.go#L1596
-// For some reason, this code is skipped when a custom dial function is provided.
-func addMissingPort(addr string, isTLS bool) string {
-	n := strings.Index(addr, ":")
-	if n >= 0 {
-		return addr
-	}
-	port := 80
-	if isTLS {
-		port = 443
-	}
-	return fmt.Sprintf("%s:%d", addr, port)
 }
 
 func (c *context) waitForInactivityTimeout(workerTimeoutTimer *time.Timer) {
