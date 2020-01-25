@@ -18,11 +18,12 @@ package v3io
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/xml"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/valyala/fasthttp"
 )
 
 //
@@ -30,11 +31,9 @@ import (
 //
 
 type NewContextInput struct {
-	ClusterEndpoints  []string
-	NumWorkers        int
-	RequestChanLen    int
-	TLSConfig         *tls.Config
-	DialTimeout       time.Duration
+	Client         *fasthttp.Client
+	NumWorkers     int
+	RequestChanLen int
 	InactivityTimeout time.Duration
 }
 
@@ -47,6 +46,7 @@ type StopContextOutput struct {
 }
 
 type NewSessionInput struct {
+	URL       string
 	Username  string
 	Password  string
 	AccessKey string
@@ -62,6 +62,7 @@ type NewContainerInput struct {
 
 type DataPlaneInput struct {
 	Ctx                 context.Context
+	URL                 string
 	ContainerName       string
 	AuthenticationToken string
 	AccessKey           string
@@ -197,6 +198,7 @@ type PutItemInput struct {
 	Path       string
 	Condition  string
 	Attributes map[string]interface{}
+	UpdateMode string
 }
 
 type PutItemsInput struct {
@@ -218,6 +220,7 @@ type UpdateItemInput struct {
 	Attributes map[string]interface{}
 	Expression *string
 	Condition  string
+	UpdateMode string
 }
 
 type GetItemInput struct {

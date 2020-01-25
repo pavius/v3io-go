@@ -2,10 +2,8 @@ package test
 
 import (
 	"fmt"
-	"testing"
-	"time"
-
 	"github.com/v3io/v3io-go/pkg/dataplane"
+	"testing"
 
 	"github.com/stretchr/testify/suite"
 )
@@ -66,7 +64,6 @@ func (suite *asyncObjectTestSuite) TestObject() {
 		suite.populateDataPlaneInput(&putObjectInput.DataPlaneInput)
 
 		request, err := suite.container.PutObject(putObjectInput, &someContext, responseChan)
-		time.Sleep(2 * time.Second)
 
 		suite.Require().NoError(err)
 		suite.Require().NotNil(request)

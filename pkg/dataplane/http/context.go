@@ -35,50 +35,38 @@ var requestID uint64
 var ErrContextStopped = errors.New("Context stopped")
 
 type context struct {
-	logger            logger.Logger
-	requestChan       chan *v3io.Request
-	httpClient        *fasthttp.HostClient
-	clusterEndpoints  []string
-	numWorkers        int
+	logger           logger.Logger
+	requestChan      chan *v3io.Request
+	httpClient       *fasthttp.Client
+	clusterEndpoints []string
+	numWorkers       int
 	inactivityTimer   *time.Timer
 	inactivityTimeout time.Duration
 }
 
-func NewContext(parentLogger logger.Logger, newContextInput *v3io.NewContextInput) (v3io.Context, error) {
-	var hosts []string
-	var httpEndpointFound, httpsEndpointFound bool
-
-	if len(newContextInput.ClusterEndpoints) == 0 {
-		return nil, errors.New("Zero cluster endpoints provided")
+func NewClient(tlsConfig *tls.Config, dialTimeout time.Duration) *fasthttp.Client {
+	if tlsConfig == nil {
+		tlsConfig = &tls.Config{InsecureSkipVerify: true}
 	}
 
-	// iterate over endpoints which contain scheme
-	for _, clusterEndpoint := range newContextInput.ClusterEndpoints {
-
-		// Return a clearer error if an empty cluster endpoint is provided.
-		if clusterEndpoint == "" {
-			return nil, errors.New("Cluster endpoint may not be empty")
-		}
-
-		parsedClusterEndpoint, err := url.Parse(clusterEndpoint)
-		if err != nil {
-			return nil, err
-		}
-		switch parsedClusterEndpoint.Scheme {
-		case "http":
-			httpEndpointFound = true
-		case "https":
-			httpsEndpointFound = true
-		default:
-			return nil, errors.Errorf("Unsupported endpoint scheme: %s", parsedClusterEndpoint.Scheme)
-		}
-		hosts = append(hosts, parsedClusterEndpoint.Host)
+	if dialTimeout == 0 {
+		dialTimeout = fasthttp.DefaultDialTimeout
+	}
+	dialFunction := func(addr string) (net.Conn, error) {
+		return fasthttp.DialTimeout(addr, dialTimeout)
 	}
 
-	if httpEndpointFound && httpsEndpointFound {
-		return nil, errors.New("cannot create a context with a mix of HTTP and HTTPS endpoints")
+	return &fasthttp.Client{
+		TLSConfig: tlsConfig,
+		Dial:      dialFunction,
 	}
+}
 
+func NewDefaultClient() *fasthttp.Client {
+	return NewClient(nil, 0)
+}
+
+func NewContext(parentLogger logger.Logger, client *fasthttp.Client, newContextInput *v3io.NewContextInput) (v3io.Context, error) {
 	requestChanLen := newContextInput.RequestChanLen
 	if requestChanLen == 0 {
 		requestChanLen = 1024
@@ -89,31 +77,11 @@ func NewContext(parentLogger logger.Logger, newContextInput *v3io.NewContextInpu
 		numWorkers = 8
 	}
 
-	tlsConfig := newContextInput.TLSConfig
-	if tlsConfig == nil {
-		tlsConfig = &tls.Config{InsecureSkipVerify: true}
-	}
-
-	dialTimeout := newContextInput.DialTimeout
-	if dialTimeout == 0 {
-		dialTimeout = fasthttp.DefaultDialTimeout
-	}
-
-	dialFunction := func(addr string) (net.Conn, error) {
-		return fasthttp.DialTimeout(addMissingPort(addr, httpsEndpointFound), dialTimeout)
-	}
-
 	newContext := &context{
-		logger: parentLogger.GetChild("context.http"),
-		httpClient: &fasthttp.HostClient{
-			Addr:      strings.Join(hosts, ","),
-			IsTLS:     httpsEndpointFound,
-			TLSConfig: tlsConfig,
-			Dial:      dialFunction,
-		},
-		clusterEndpoints:  newContextInput.ClusterEndpoints,
-		requestChan:       make(chan *v3io.Request, requestChanLen),
-		numWorkers:        numWorkers,
+		logger:      parentLogger.GetChild("context.http"),
+		httpClient:  client,
+		requestChan: make(chan *v3io.Request, requestChanLen),
+		numWorkers:  numWorkers,
 		inactivityTimeout: newContextInput.InactivityTimeout,
 	}
 
@@ -143,6 +111,7 @@ func (c *context) Stop(timeout *time.Duration) error {
 func (c *context) NewSession(newSessionInput *v3io.NewSessionInput) (v3io.Session, error) {
 	return newSession(c.logger,
 		c,
+		newSessionInput.URL,
 		newSessionInput.Username,
 		newSessionInput.Password,
 		newSessionInput.AccessKey)
@@ -360,6 +329,12 @@ func (c *context) PutItem(putItemInput *v3io.PutItemInput,
 
 // PutItemSync
 func (c *context) PutItemSync(putItemInput *v3io.PutItemInput) error {
+	var body map[string]interface{}
+	if putItemInput.UpdateMode != "" {
+		body = map[string]interface{}{
+			"UpdateMode": putItemInput.UpdateMode,
+		}
+	}
 
 	// prepare the query path
 	_, err := c.putItem(&putItemInput.DataPlaneInput,
@@ -368,7 +343,7 @@ func (c *context) PutItemSync(putItemInput *v3io.PutItemInput) error {
 		putItemInput.Attributes,
 		putItemInput.Condition,
 		putItemHeaders,
-		nil)
+		body)
 
 	return err
 }
@@ -441,6 +416,10 @@ func (c *context) UpdateItemSync(updateItemInput *v3io.UpdateItemInput) error {
 			"UpdateMode": "CreateOrReplaceAttributes",
 		}
 
+		if updateItemInput.UpdateMode != "" {
+			body["UpdateMode"] = updateItemInput.UpdateMode
+		}
+
 		_, err = c.putItem(&updateItemInput.DataPlaneInput,
 			updateItemInput.Path,
 			putItemFunctionName,
@@ -456,7 +435,8 @@ func (c *context) UpdateItemSync(updateItemInput *v3io.UpdateItemInput) error {
 			updateItemFunctionName,
 			*updateItemInput.Expression,
 			updateItemInput.Condition,
-			updateItemHeaders)
+			updateItemHeaders,
+			updateItemInput.UpdateMode)
 	}
 
 	return err
@@ -792,12 +772,18 @@ func (c *context) updateItemWithExpression(dataPlaneInput *v3io.DataPlaneInput,
 	functionName string,
 	expression string,
 	condition string,
-	headers map[string]string) (*v3io.Response, error) {
+	headers map[string]string,
+	updateMode string) (*v3io.Response, error) {
 
 	body := map[string]interface{}{
 		"UpdateExpression": expression,
 		"UpdateMode":       "CreateOrReplaceAttributes",
 	}
+
+	if updateMode != "" {
+		body["UpdateMode"] = updateMode
+	}
+
 
 	if condition != "" {
 		body["ConditionExpression"] = condition
@@ -868,7 +854,7 @@ func (c *context) sendRequest(dataPlaneInput *v3io.DataPlaneInput,
 	request := fasthttp.AcquireRequest()
 	response := c.allocateResponse()
 
-	uri, err := c.buildRequestURI(dataPlaneInput.ContainerName, query, path)
+	uri, err := c.buildRequestURI(dataPlaneInput.URL, dataPlaneInput.ContainerName, query, path)
 	if err != nil {
 		return nil, err
 	}
@@ -949,8 +935,8 @@ cleanup:
 	return response, nil
 }
 
-func (c *context) buildRequestURI(containerName string, query string, pathStr string) (*url.URL, error) {
-	uri, err := url.Parse(c.clusterEndpoints[0])
+func (c *context) buildRequestURI(urlString string, containerName string, query string, pathStr string) (*url.URL, error) {
+	uri, err := url.Parse(urlString)
 	if err != nil {
 		return nil, errors.Wrapf(err, "Failed to parse cluster endpoint URL %s", c.clusterEndpoints[0])
 	}
@@ -958,7 +944,7 @@ func (c *context) buildRequestURI(containerName string, query string, pathStr st
 	if strings.HasSuffix(pathStr, "/") {
 		uri.Path += "/" // retain trailing slash
 	}
-	uri.RawQuery = query
+	uri.RawQuery = strings.ReplaceAll(query, " ", "%20")
 	return uri, nil
 }
 
